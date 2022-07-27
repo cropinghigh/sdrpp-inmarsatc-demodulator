@@ -17,7 +17,7 @@ file(GLOB_RECURSE SRC "src/*.cpp" "src/*.c")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
 
 add_library(inmarsatc_demodulator SHARED ${SRC})
-target_link_libraries(inmarsatc_demodulator PRIVATE sdrpp_core)
+target_link_libraries(inmarsatc_demodulator PRIVATE sdrpp_core inmarsatc_decoder)
 target_include_directories(inmarsatc_demodulator PRIVATE "src/" "/usr/include/sdrpp_core/" "/usr/include/sdrpp_core/imgui")
 set_target_properties(inmarsatc_demodulator PROPERTIES PREFIX "")
 

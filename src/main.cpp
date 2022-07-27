@@ -17,6 +17,8 @@
 
 #include <gui/widgets/constellation_diagram.h>
 
+#include <inmarsatc_decoder.h>
+
 #define ENABLE_SYNC_DETECT
 
 #include "symbol_extractor.h"
@@ -51,12 +53,12 @@ public:
         port = config.conf[name]["port"];
         config.release(true);
 
-        float recov_bandwidth = 0.09f;
+        float recov_bandwidth = 0.03f;
         float recov_dampningFactor = 0.71f;
         float recov_denominator = (1.0f + 2.0*recov_dampningFactor*recov_bandwidth + recov_bandwidth*recov_bandwidth);
         float recov_mu = (4.0f * recov_dampningFactor * recov_bandwidth) / recov_denominator;
         float recov_omega = (4.0f * recov_bandwidth * recov_bandwidth) / recov_denominator;
-        mainDemodulator.init(nullptr, 1200, 3600, 33, 1.0f, 0.5f, 0.05f, recov_omega, recov_mu, 0.01f);
+        mainDemodulator.init(nullptr, 1200, 3600, 33, 0.35f, 0.5f, 0.05f, recov_omega, recov_mu, 0.01f);
         constDiagSplitter.init(&mainDemodulator.out);
         constDiagSplitter.bindStream(&constDiagStream);
         constDiagSplitter.bindStream(&demodStream);
@@ -136,6 +138,21 @@ private:
         ImGui::SameLine();
         ImGui::BoxIndicator(_this->symbolExtractor.sync ? IM_COL32(5, 230, 5, 255) : IM_COL32(230, 5, 5, 255));
 #endif
+        ImGui::Text("Frames decoding result: ");
+        if(_this->lastFrame.length != -1) {
+            ImGui::TextColored(ImVec4(0.1, 0.8, 0.1, 1.0), "   Last frame number: ");
+            ImGui::SameLine();
+            ImGui::Text(std::to_string(_this->lastFrame.frameNumber).c_str());
+            (_this->lastFrame.BER < 2) ? ImGui::TextColored(ImVec4(0.1, 0.8, 0.1, 1.0), "   BER: ") : ImGui::TextColored(ImVec4(0.8, 0.1, 0.1, 1.0), "   BER: ");
+            ImGui::SameLine();
+            ImGui::Text(std::to_string(_this->lastFrame.BER).c_str());
+            if(_this->lastFrame.isReversedPolarity) ImGui::Text("   Reversed polarity");
+            if(_this->lastFrame.isMidStreamReversePolarity) ImGui::TextColored(ImVec4(0.8, 0.8, 0.1, 1.0), "   Midstream rev polarity");
+            if(_this->lastFrame.isUncertain) ImGui::TextColored(ImVec4(0.8, 0.8, 0.1, 1.0), "   Uncertain");
+        } else {
+            ImGui::TextColored(ImVec4(0.8, 0.1, 0.1, 1.0), "   No decoded frames");
+        }
+
         bool listening = _this->conn && _this->conn->isOpen();
 
         if (listening && _this->enabled) { style::beginDisabled(); }
@@ -195,12 +212,44 @@ private:
         _this->constDiag.releaseBuffer();
     }
 
+    //serialization
+    template< typename T >
+    static std::array< char, sizeof(T) >  to_bytes( const T& object ) {
+        std::array< char, sizeof(T) > bytes ;
+
+        const char* begin = reinterpret_cast< const char* >( std::addressof(object) ) ;
+        const char* end = begin + sizeof(T) ;
+        std::copy( begin, end, std::begin(bytes) ) ;
+
+        return bytes ;
+    }
+
+    template< typename T >
+    static T& from_bytes( const std::array< char, sizeof(T) >& bytes, T& object ) {
+        // http://en.cppreference.com/w/cpp/types/is_trivially_copyable
+        static_assert( std::is_trivially_copyable<T>::value, "not a TriviallyCopyable type" ) ;
+
+        char* begin_object = reinterpret_cast< char* >( std::addressof(object) ) ;
+        std::copy( std::begin(bytes), std::end(bytes), begin_object ) ;
+
+        return object;
+    }
+
+
     static void _demodSinkHandler(uint8_t* data, int count, void* ctx) {
         InmarsatcDemodulatorModule* _this = (InmarsatcDemodulatorModule*)ctx;
-        std::lock_guard lck(_this->connMtx);
-        if (!_this->conn || !_this->conn->isOpen()) { return; }
-
-        _this->conn->write(count, data);
+        std::vector<inmarsatc::decoder::Decoder::decoder_result> results = _this->frameDec.decode(data);
+        if(results.size() > 0) {
+            _this->lastFrame = results[results.size()-1];
+            for(int i = 0; i < results.size(); i++) {
+                std::lock_guard lck(_this->connMtx);
+                if(_this->conn && _this->conn->isOpen()) {
+                    inmarsatc::decoder::Decoder::decoder_result res = results[i];
+                    auto serialized = to_bytes(res);
+                     _this->conn->write(serialized.size(), (uint8_t*)serialized.data());
+                }
+            }
+        }
 
     }
 
@@ -223,10 +272,13 @@ private:
     dsp::BPSKSymbolExtractor symbolExtractor;
     dsp::buffer::Packer<uint8_t> symbolPacker;
     dsp::sink::Handler<uint8_t> demodSink;
+    inmarsatc::decoder::Decoder frameDec = inmarsatc::decoder::Decoder(9);
+    inmarsatc::decoder::Decoder::decoder_result lastFrame = {{}, -1};
+
     net::Conn conn;
     std::mutex connMtx;
     char hostname[1024] = "localhost\0";
-    int port = 15003;
+    int port = 15004;
 
 };
 
