@@ -136,7 +136,7 @@ private:
         ImGui::SigQualityMeter(avg, 0.5f, 1.0f);
         ImGui::Text("Sync ");
         ImGui::SameLine();
-        ImGui::BoxIndicator(_this->symbolExtractor.sync ? IM_COL32(5, 230, 5, 255) : IM_COL32(230, 5, 5, 255));
+        ImGui::BoxIndicator(menuWidth, _this->symbolExtractor.sync ? IM_COL32(5, 230, 5, 255) : IM_COL32(230, 5, 5, 255));
 #endif
         ImGui::Text("Frames decoding result: ");
         if(_this->lastFrame.length != -1) {
