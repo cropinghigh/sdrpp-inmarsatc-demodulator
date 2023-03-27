@@ -5,7 +5,8 @@
 #include <gui/gui.h>
 #include <signal_path/signal_path.h>
 #include <module.h>
-#include <utils/networking.h>
+#include <utils/flog.h>
+#include <utils/net.h>
 
 #include <dsp/demod/psk.h>
 #include <dsp/buffer/reshaper.h>
@@ -26,11 +27,20 @@
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 
+#define VFO_SAMPLERATE 2400
+#define CLOCK_RECOVERY_BW 0.01f
+#define CLOCK_RECOVERY_DAMPN_F 0.71f
+#define CLOCK_RECOVERY_REL_LIM 0.001f
+#define RRC_TAP_COUNT 33
+#define RRC_ALPHA 0.35f
+#define AGC_RATE 0.02f
+#define COSTAS_LOOP_BANDWIDTH 0.01f
+
 SDRPP_MOD_INFO {
     /* Name:            */ "inmarsatc_demodulator",
     /* Description:     */ "Inmarsat-c demodulator for SDR++",
     /* Author:          */ "cropinghigh",
-    /* Version:         */ 0, 3, 0,
+    /* Version:         */ 0, 3, 1,
     /* Max instances    */ -1
 };
 
@@ -38,7 +48,7 @@ ConfigManager config;
 
 class InmarsatcDemodulatorModule : public ModuleManager::Instance {
 public:
-    InmarsatcDemodulatorModule(std::string name) {
+    InmarsatcDemodulatorModule(std::string name) : frameDec(9) {
         this->name = name;
 
         // Load config
@@ -53,12 +63,12 @@ public:
         port = config.conf[name]["port"];
         config.release(true);
 
-        float recov_bandwidth = 0.03f;
-        float recov_dampningFactor = 0.71f;
+        float recov_bandwidth = CLOCK_RECOVERY_BW;
+        float recov_dampningFactor = CLOCK_RECOVERY_DAMPN_F;
         float recov_denominator = (1.0f + 2.0*recov_dampningFactor*recov_bandwidth + recov_bandwidth*recov_bandwidth);
         float recov_mu = (4.0f * recov_dampningFactor * recov_bandwidth) / recov_denominator;
         float recov_omega = (4.0f * recov_bandwidth * recov_bandwidth) / recov_denominator;
-        mainDemodulator.init(nullptr, 1200, 3600, 33, 0.35f, 0.5f, 0.05f, recov_omega, recov_mu, 0.01f);
+        mainDemodulator.init(nullptr, 1200, VFO_SAMPLERATE, RRC_TAP_COUNT, RRC_ALPHA, AGC_RATE, COSTAS_LOOP_BANDWIDTH, recov_omega, recov_mu, CLOCK_RECOVERY_REL_LIM);
         constDiagSplitter.init(&mainDemodulator.out);
         constDiagSplitter.bindStream(&constDiagStream);
         constDiagSplitter.bindStream(&demodStream);
@@ -88,7 +98,7 @@ public:
     void postInit() {}
 
     void enable() {
-        vfo = sigpath::vfoManager.createVFO(name, ImGui::WaterfallVFO::REF_CENTER, 0, 2500, 3600, 2500, 2500, true);
+        vfo = sigpath::vfoManager.createVFO(name, ImGui::WaterfallVFO::REF_CENTER, 0, 2500, VFO_SAMPLERATE, 2500, 2500, true);
         mainDemodulator.setInput(vfo->output);
         mainDemodulator.start();
         constDiagSplitter.start();
@@ -195,7 +205,12 @@ private:
     }
 
     void startServer() {
-        conn = net::openUDP("0.0.0.0", port, hostname, port, false);
+        stopServer();
+        try {
+            conn = net::openudp(hostname, port);
+        } catch (std::runtime_error& e) {
+            flog::error("Network error: %s\n", e.what());
+        }
     }
 
     void stopServer() {
@@ -246,7 +261,7 @@ private:
                 if(_this->conn && _this->conn->isOpen()) {
                     inmarsatc::decoder::Decoder::decoder_result res = results[i];
                     auto serialized = to_bytes(res);
-                     _this->conn->write(serialized.size(), (uint8_t*)serialized.data());
+                     _this->conn->send((uint8_t*)serialized.data(), serialized.size());
                 }
             }
         }
@@ -272,10 +287,10 @@ private:
     dsp::BPSKSymbolExtractor symbolExtractor;
     dsp::buffer::Packer<uint8_t> symbolPacker;
     dsp::sink::Handler<uint8_t> demodSink;
-    inmarsatc::decoder::Decoder frameDec = inmarsatc::decoder::Decoder(9);
+    inmarsatc::decoder::Decoder frameDec;
     inmarsatc::decoder::Decoder::decoder_result lastFrame = {{}, -1};
 
-    net::Conn conn;
+    std::shared_ptr<net::Socket> conn;
     std::mutex connMtx;
     char hostname[1024] = "localhost\0";
     int port = 15004;
