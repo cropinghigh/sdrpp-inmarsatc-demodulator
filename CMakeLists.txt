@@ -12,7 +12,7 @@ else ()
     set(CMAKE_CXX_FLAGS "-O3 -std=c++17")
 endif ()
 
-file(GLOB_RECURSE SRC "src/*.cpp" "src/*.c")
+file(GLOB_RECURSE SRC "src/*.cpp" "src/*.h" "src/*.hpp"  "src/*.c")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
 

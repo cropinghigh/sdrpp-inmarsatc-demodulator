@@ -159,7 +159,7 @@ namespace dsp {
                 // Process all samples
                 int outCount = 0;
                 while (offset < count) {
-                    float error;
+                    float error = 0;
                     complex_t outVal;
                     complex_t dfdt;
 
@@ -380,8 +380,8 @@ namespace dsp {
                 int ret = count;
                 ret = rrc.process(ret, in, out);
                 ret = agc.process(ret, out, out);
-                ret = recov.process(ret, out, out);
                 ret = costas.process(ret, out, out);
+                ret = recov.process(ret, out, out);
                 return ret;
             }
 
@@ -410,6 +410,7 @@ namespace dsp {
             loop::FastAGC<complex_t> agc;
             loop::Costas<2> costas;
             clock_recovery::COMPLEX_FD recov;
+//            clock_recovery::MM<complex_t> recov;
         };
     }
 }

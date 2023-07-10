@@ -30,11 +30,11 @@
 #define VFO_SAMPLERATE 2400
 #define CLOCK_RECOVERY_BW 0.01f
 #define CLOCK_RECOVERY_DAMPN_F 0.71f
-#define CLOCK_RECOVERY_REL_LIM 0.001f
+#define CLOCK_RECOVERY_REL_LIM 0.1f
 #define RRC_TAP_COUNT 33
 #define RRC_ALPHA 0.35f
-#define AGC_RATE 0.02f
-#define COSTAS_LOOP_BANDWIDTH 0.01f
+#define AGC_RATE 0.005f
+#define COSTAS_LOOP_BANDWIDTH 0.045f
 
 SDRPP_MOD_INFO {
     /* Name:            */ "inmarsatc_demodulator",
@@ -118,6 +118,7 @@ public:
         symbolExtractor.stop();
         symbolPacker.stop();
         demodSink.stop();
+        mainDemodulator.reset();
         sigpath::vfoManager.deleteVFO(vfo);
         enabled = false;
     }
@@ -152,10 +153,10 @@ private:
         if(_this->lastFrame.length != -1) {
             ImGui::TextColored(ImVec4(0.1, 0.8, 0.1, 1.0), "   Last frame number: ");
             ImGui::SameLine();
-            ImGui::Text(std::to_string(_this->lastFrame.frameNumber).c_str());
+            ImGui::Text("%s", std::to_string(_this->lastFrame.frameNumber).c_str());
             (_this->lastFrame.BER < 2) ? ImGui::TextColored(ImVec4(0.1, 0.8, 0.1, 1.0), "   BER: ") : ImGui::TextColored(ImVec4(0.8, 0.1, 0.1, 1.0), "   BER: ");
             ImGui::SameLine();
-            ImGui::Text(std::to_string(_this->lastFrame.BER).c_str());
+            ImGui::Text("%s", std::to_string(_this->lastFrame.BER).c_str());
             if(_this->lastFrame.isReversedPolarity) ImGui::Text("   Reversed polarity");
             if(_this->lastFrame.isMidStreamReversePolarity) ImGui::TextColored(ImVec4(0.8, 0.8, 0.1, 1.0), "   Midstream rev polarity");
             if(_this->lastFrame.isUncertain) ImGui::TextColored(ImVec4(0.8, 0.8, 0.1, 1.0), "   Uncertain");
@@ -273,7 +274,8 @@ private:
 
     VFOManager::VFO* vfo;
 
-    dsp::demod::InmarsatCDemod mainDemodulator;
+    dsp::demod::PSK<2> mainDemodulator;
+//    dsp::demod::InmarsatCDemod mainDemodulator;
 
     dsp::routing::Splitter<dsp::complex_t> constDiagSplitter;
 
