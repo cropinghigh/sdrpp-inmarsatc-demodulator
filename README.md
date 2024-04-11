@@ -16,14 +16,11 @@ Related projects:
 
 Building:
 
-  1.  Install SDR++ core headers to /usr/include/sdrpp_core/(if not installed) (sdrpp-headers-git package for arch-like systems)
+  1.  Install SDR++ core headers to /usr/include/sdrpp_core/, if not installed. Refer to sdrpp-headers-git AUR package PKGBUILD on instructions how to do that
 
-          git clone https://github.com/AlexandreRouma/SDRPlusPlus.git
-          cd "SDRPlusPlus/core/src"
-          sudo mkdir -p "/usr/include/sdrpp_core"
-          sudo find . -regex ".*\.\(h\|hpp\)" -exec cp --parents \{\} "/usr/include/sdrpp_core" \;
+      OR if you don't want to use my header system, add -DSDRPP_MODULE_CMAKE="/path/to/sdrpp_build_dir/sdrpp_module.cmake" to cmake launch arguments
 
-      Install inmarsatc library(https://github.com/cropinghigh/inmarsatc) if not installed(libinmarsatc-git package for arch-like systems).
+      Install inmarsatc library(https://github.com/cropinghigh/inmarsatc) if not installed(libinmarsatc-git package for arch-like systems):
 
           git clone https://github.com/cropinghigh/inmarsatc
           cd inmarsatc
@@ -33,7 +30,7 @@ Building:
           make
           sudo make install
 
-  2.  Build:
+  2.  Build(from this project repo folder):
 
           mkdir build
           cd build
@@ -41,14 +38,7 @@ Building:
           make
           sudo make install
 
-  4.  Enable new module by adding
-
-          "Inmarsat-C demodulator": {
-            "enabled": true,
-            "module": "inmarsatc_demodulator"
-          }
-
-      to config.json, or add it via Module manager
+  4.  Enable new module by adding it via Module manager
 
 Usage:
 
